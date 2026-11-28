@@ -5926,13 +5926,32 @@ def mac_agent_off(label):
     return True, ""
 
 
+def mac_agent_args(label):
+    import plistlib
+    try:
+        with open(mac_agent_path(label), "rb") as f:
+            return plistlib.load(f).get("ProgramArguments")
+    except (OSError, ValueError, plistlib.InvalidFileException):
+        return None
+
+
+def mac_agent_loaded(label, running=False):
+    ok, out = mac_launchctl("print", "%s/%s" % (mac_domain(), label))
+    return ok and (not running or "state = running" in out)
+
+
 def mac_refresh_agents():
     """Sottovoce may have moved (a new version dragged to Applications): point the agents
-    that are on at this copy."""
-    if os.path.exists(mac_agent_path(MAC_SYNC_LABEL)):
+    that are on at this copy. Only when something changed, since reloading stops the
+    receiver for a moment. Runs in a thread: launchctl can take seconds."""
+    if os.path.exists(mac_agent_path(MAC_SYNC_LABEL)) and (
+            mac_agent_args(MAC_SYNC_LABEL) != self_command("--sync-server")
+            or not mac_agent_loaded(MAC_SYNC_LABEL, running=True)):
         mac_agent_on(MAC_SYNC_LABEL, ["--sync-server"], {"RunAtLoad": True, "KeepAlive": True})
     on, time = reminder_settings()
-    if on and os.path.exists(mac_agent_path(MAC_REMIND_LABEL)):
+    if on and os.path.exists(mac_agent_path(MAC_REMIND_LABEL)) and (
+            mac_agent_args(MAC_REMIND_LABEL) != self_command("--remind")
+            or not mac_agent_loaded(MAC_REMIND_LABEL)):
         mac_apply_reminder(True, time)
 
 
@@ -10961,7 +10980,8 @@ class App(Adw.Application):
             apply_style(load_config().get("style", default_style()))
             watch_window_dots()
             if IS_MAC:
-                mac_refresh_agents()
+                import threading
+                threading.Thread(target=mac_refresh_agents, daemon=True).start()
         win = self.get_active_window() or Window(self, self.page)
         win.present()
 

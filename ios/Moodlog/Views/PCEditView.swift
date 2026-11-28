@@ -10,6 +10,7 @@ struct PCEditView: View {
     @State private var testResult = ""
     @State private var testing = false
     @State private var confirmRemove = false
+    @State private var sending = false
 
     private func field(_ key: WritableKeyPath<PCLink, String>) -> Binding<String> {
         Binding(get: { pcs.items.first { $0.id == id }?[keyPath: key] ?? "" },
@@ -56,6 +57,28 @@ struct PCEditView: View {
                 }
             } footer: {
                 Text("In Sottovoce on this PC, open Phone sync and switch the receiver on. Use the address and token shown there.")
+            }
+            Section {
+                Button {
+                    guard let pc else { return }
+                    pcs.update(id) { $0.yearSent = nil }     // the whole last year, not only the last week
+                    sending = true
+                    Task {
+                        await sync.sendHealth(to: [pc])
+                        sending = false
+                    }
+                } label: {
+                    HStack {
+                        Text("Send the last year of Health")
+                        if sending { Spacer(); ProgressView() }
+                    }
+                }
+                .disabled(!(pc?.isConfigured ?? false) || sending)
+                if !sync.healthStatus.isEmpty && !sending {
+                    Text(sync.healthStatus).font(.footnote).foregroundStyle(.secondary)
+                }
+            } footer: {
+                Text("Sleep, steps and resting heart rate from the last 12 months, for a PC that's new or missing older nights.")
             }
             Section {
                 Button("Remove this PC", role: .destructive) { confirmRemove = true }

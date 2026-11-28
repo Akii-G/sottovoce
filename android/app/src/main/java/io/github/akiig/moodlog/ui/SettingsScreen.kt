@@ -183,6 +183,16 @@ fun SettingsScreen(onPrivacy: () -> Unit, onSurveys: () -> Unit = {}, onWhatsNew
                                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 10.dp))
                             }
                             Line()
+                            ActionRow(tr("Send the last year of health data"), enabled = pc.isConfigured) {
+                                changePC(pc.id) { it.copy(yearSent = false) }
+                                val fresh = prefs.pcs.first { it.id == pc.id }
+                                scope.launch { app.sync.sendHealth(listOf(fresh)) }
+                            }
+                            if (app.sync.healthStatus.isNotEmpty()) {
+                                Text(app.sync.healthStatus, style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 10.dp))
+                            }
+                            Line()
                             ActionRow(tr("Remove this PC"), destructive = true) { confirmRemove = pc.id }
                         }
                     }
