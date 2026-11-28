@@ -93,7 +93,12 @@ jobs:
           mkdir -p build/dmg
           cp -R dist/Sottovoce.app build/dmg/
           ln -s /Applications build/dmg/Applications
-          hdiutil create -volname "Sottovoce" -srcfolder build/dmg -ov -format UDZO "Sottovoce-Mac-$VERSION-${{ matrix.arch }}.dmg"
+          # hdiutil sometimes answers "Resource busy" on the runners: try again
+          for try in 1 2 3 4 5; do
+            hdiutil create -volname "Sottovoce" -srcfolder build/dmg -ov -format UDZO "Sottovoce-Mac-$VERSION-${{ matrix.arch }}.dmg" && break
+            sleep 10
+          done
+          test -s "Sottovoce-Mac-$VERSION-${{ matrix.arch }}.dmg"
           ls -la Sottovoce-Mac-*.dmg
           echo "DMG=Sottovoce-Mac-$VERSION-${{ matrix.arch }}.dmg" >> "$GITHUB_ENV"
 
