@@ -12,6 +12,10 @@ sys.argv = [script]
 loader = importlib.machinery.SourceFileLoader("moodlog", script)
 spec = importlib.util.spec_from_loader("moodlog", loader); m = importlib.util.module_from_spec(spec); loader.exec_module(m)
 
+name = m.local_host_name()
+print("name on the Wi-Fi:", name + ".local")
+assert name and "." not in name, name
+
 def where_stuck(label):
     """What a stuck launchd agent is doing: macOS's `sample` of its process."""
     import re as _re

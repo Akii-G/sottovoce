@@ -10,6 +10,7 @@ struct PCLink: Codable, Identifiable, Hashable {
     var token = ""
     var lastHealth: Date?           // Health is sent to each PC at most hourly
     var medicationsSentAll = false  // this PC already has the whole medication history
+    var yearSent: Bool?             // this PC already has the last year of Health
 
     var cleanServer: String { server.trimmingCharacters(in: .whitespacesAndNewlines) }
     var cleanToken: String { token.trimmingCharacters(in: .whitespacesAndNewlines) }

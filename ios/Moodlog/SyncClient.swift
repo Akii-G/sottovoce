@@ -234,17 +234,21 @@ final class SyncCoordinator {
             healthStatus = SyncError.notConfigured.localizedDescription
             return
         }
-        let health: [String]
-        do {
-            health = try await HealthSender.lines(days: 7)
-        } catch {
-            healthStatus = error.localizedDescription
-            return
-        }
+        // a PC that never had Health gets the last year, so its charts and report are complete
+        var health: [Int: [String]] = [:]
         var answers: [String] = []
         for pc in pcs {
+            let days = pc.yearSent == true ? 7 : 365
+            if health[days] == nil {
+                do {
+                    health[days] = try await HealthSender.lines(days: days)
+                } catch {
+                    healthStatus = error.localizedDescription
+                    return
+                }
+            }
             let meds = await Medications.lines(all: !pc.medicationsSentAll)
-            let lines = health + meds.lines
+            let lines = (health[days] ?? []) + meds.lines
             if lines.isEmpty {
                 healthStatus = tr("No Health data found for the last 7 days (or access wasn't allowed in Settings → Health → Data Access).")
                 return
@@ -253,6 +257,7 @@ final class SyncCoordinator {
                 let answer = try await SyncClient.sendHealth(lines: lines, pc: pc)
                 PCList.shared.update(pc.id) {
                     $0.lastHealth = Date()
+                    $0.yearSent = true
                     if meds.all { $0.medicationsSentAll = true }
                 }
                 answers.append(pcs.count == 1 ? answer : pc.title + ": " + answer)

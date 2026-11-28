@@ -34,6 +34,7 @@ data class PCLink(
     val server: String = "",
     val token: String = "",
     val lastHealth: Long = 0,     // Health goes to each PC at most hourly
+    val yearSent: Boolean = false,  // this PC already has the last year of health data
 ) {
     val isConfigured get() = server.isNotBlank() && token.isNotBlank()
 
@@ -50,11 +51,11 @@ data class PCLink(
         }
 
     fun toJson(): JSONObject = JSONObject().put("id", id).put("name", name).put("server", server)
-        .put("token", token).put("lastHealth", lastHealth)
+        .put("token", token).put("lastHealth", lastHealth).put("yearSent", yearSent)
 
     companion object {
         fun from(o: JSONObject) = PCLink(o.optString("id").ifEmpty { java.util.UUID.randomUUID().toString() },
-            o.optString("name"), o.optString("server"), o.optString("token"), o.optLong("lastHealth"))
+            o.optString("name"), o.optString("server"), o.optString("token"), o.optLong("lastHealth"), o.optBoolean("yearSent"))
     }
 }
 
@@ -434,18 +435,23 @@ class SyncCoordinator(
             healthStatus = tr("Add your PC's address and token in Settings first.")
             return
         }
-        val lines = try { health.lines(7) } catch (e: Exception) {
-            healthStatus = message(e); return
-        }
-        if (lines.isEmpty()) {
-            healthStatus = tr("No health data found for the last 7 days. Check that your watch or fitness app shares it with Health Connect.")
-            return
-        }
+        // a PC that never had health data gets the last year, so its charts and report are complete
+        val cache = mutableMapOf<Int, List<String>>()
         val answers = mutableListOf<String>()
         for (pc in pcs) {
+            val days = if (pc.yearSent) 7 else 365
+            val lines = cache[days] ?: try { health.lines(days).also { cache[days] = it } } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                healthStatus = message(e); return
+            }
+            if (lines.isEmpty()) {
+                healthStatus = tr("No health data found for the last 7 days. Check that your watch or fitness app shares it with Health Connect.")
+                return
+            }
             val answer = try {
                 val a = withContext(Dispatchers.IO) { client.forPC(pc).sendHealth(lines) }
-                prefs.updatePC(pc.id) { it.copy(lastHealth = System.currentTimeMillis()) }
+                prefs.updatePC(pc.id) { it.copy(lastHealth = System.currentTimeMillis(), yearSent = true) }
                 a
             } catch (e: CancellationException) {
                 throw e

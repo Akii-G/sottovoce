@@ -26,6 +26,50 @@ import subprocess
 import sys
 import unicodedata
 
+
+def mac_hide_from_dock():
+    """The background runs (sync, reminders) start the same app as the window. GTK makes
+    every one of them a Dock app, which never answers macOS (it has no window), so it
+    shows a second icon that looks frozen and comes back after Force Quit. This makes
+    the running process a background one again."""
+    if sys.platform != "darwin":
+        return
+    try:
+        import ctypes
+        objc = ctypes.cdll.LoadLibrary("/usr/lib/libobjc.A.dylib")
+        ctypes.cdll.LoadLibrary("/System/Library/Frameworks/AppKit.framework/AppKit")
+        objc.objc_getClass.restype = ctypes.c_void_p
+        objc.objc_getClass.argtypes = [ctypes.c_char_p]
+        objc.sel_registerName.restype = ctypes.c_void_p
+        objc.sel_registerName.argtypes = [ctypes.c_char_p]
+        send = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)(
+            ctypes.cast(objc.objc_msgSend, ctypes.c_void_p).value)
+        app = send(objc.objc_getClass(b"NSApplication"), objc.sel_registerName(b"sharedApplication"))
+        set_policy = ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long)(
+            ctypes.cast(objc.objc_msgSend, ctypes.c_void_p).value)
+        set_policy(app, objc.sel_registerName(b"setActivationPolicy:"), 2)   # NSApplicationActivationPolicyProhibited
+    except Exception as e:
+        print("Couldn't hide from the Dock:", e, file=sys.stderr)
+
+
+def local_host_name():
+    """This computer's name on the Wi-Fi, for name.local addresses. On a Mac it's the
+    Bonjour name from Sharing settings, which can differ from what the router calls it."""
+    if sys.platform == "darwin":
+        try:
+            name = subprocess.run(["scutil", "--get", "LocalHostName"], capture_output=True,
+                                  text=True, timeout=5).stdout.strip()
+            if name:
+                return name
+        except Exception:
+            pass
+    return socket.gethostname().split(".")[0]
+
+
+BACKGROUND_ARGS = ("--sync-server", "--remind", "--background")
+if any(a in sys.argv[1:] for a in BACKGROUND_ARGS):
+    mac_hide_from_dock()        # before GTK starts, so the icon doesn't even flash
+
 # a Mac draws GTK windows reliably only with the cairo renderer (the GL one can leave them black)
 if sys.platform == "darwin":
     os.environ.setdefault("GSK_RENDERER", "cairo")
@@ -8275,7 +8319,7 @@ class SyncWindow(Gtk.Window):
         self.status.add_css_class("dim-label")
         col.append(self.status)
 
-        host = socket.gethostname()
+        host = local_host_name()
         ip = lan_address()
         address = "http://%s.local:%d/health" % (host, cfg["port"])
         grid = Gtk.Grid(column_spacing=12, row_spacing=8)
@@ -11007,8 +11051,10 @@ def main(argv):
         print("Sottovoce", VERSION)
         return 0
     if "--remind" in argv:
+        mac_hide_from_dock()      # again: GTK may have made it a Dock app while starting
         return remind()
     if "--sync-server" in argv:
+        mac_hide_from_dock()
         return run_sync_server()
     if "--resume-sync" in argv:
         return resume_receiver()

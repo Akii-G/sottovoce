@@ -85,6 +85,17 @@ jobs:
             if kill -0 $pid 2>/dev/null; then echo "$look: running"; kill $pid; else echo "$look: closed by itself"; cat "$RUNNER_TEMP/out-$look.txt"; failed=1; fi
             sleep 2
           done
+          # the background run must not be a second (frozen-looking) app in the Dock
+          "$APP" --sync-server > "$RUNNER_TEMP/bg.txt" 2>&1 &
+          bg=$!
+          sleep 8
+          lsappinfo list > "$RUNNER_TEMP/apps.txt" || true
+          kill $bg 2>/dev/null || true
+          if awk -v pid="pid = $bg " 'index($0, pid) {found=1} found && /type=/ {print; exit}' "$RUNNER_TEMP/apps.txt" | grep -q Foreground; then
+            echo "--sync-server shows in the Dock"; grep -B3 -A12 "pid = $bg " "$RUNNER_TEMP/apps.txt"; cat "$RUNNER_TEMP/bg.txt"; failed=1
+          else
+            echo "--sync-server: not in the Dock"; grep -B3 -A12 "pid = $bg " "$RUNNER_TEMP/apps.txt" || echo "(not listed at all)"
+          fi
           exit $failed
 
       - name: Make the disk image
