@@ -12,7 +12,15 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-15          # Apple silicon
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15          # Apple silicon (M1 and newer)
+            arch: AppleSilicon
+          - runner: macos-15-intel    # Intel Macs
+            arch: Intel
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
@@ -85,19 +93,19 @@ jobs:
           mkdir -p build/dmg
           cp -R dist/Sottovoce.app build/dmg/
           ln -s /Applications build/dmg/Applications
-          hdiutil create -volname "Sottovoce" -srcfolder build/dmg -ov -format UDZO "Sottovoce-Mac-$VERSION.dmg"
+          hdiutil create -volname "Sottovoce" -srcfolder build/dmg -ov -format UDZO "Sottovoce-Mac-$VERSION-${{ matrix.arch }}.dmg"
           ls -la Sottovoce-Mac-*.dmg
-          echo "DMG=Sottovoce-Mac-$VERSION.dmg" >> "$GITHUB_ENV"
+          echo "DMG=Sottovoce-Mac-$VERSION-${{ matrix.arch }}.dmg" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Sottovoce-Mac-dmg
+          name: Sottovoce-Mac-${{ matrix.arch }}-dmg
           path: Sottovoce-Mac-*.dmg
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: mac-screenshots
+          name: mac-screenshots-${{ matrix.arch }}
           path: screenshots/
 
       - name: Attach to the release
