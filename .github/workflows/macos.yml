@@ -85,6 +85,15 @@ jobs:
             if kill -0 $pid 2>/dev/null; then echo "$look: running"; kill $pid; else echo "$look: closed by itself"; cat "$RUNNER_TEMP/out-$look.txt"; failed=1; fi
             sleep 2
           done
+          # opened twice through Finder (open), it must stay one app with one Dock icon
+          open dist/Sottovoce.app; sleep 15; open dist/Sottovoce.app; sleep 10
+          lsappinfo list | grep -B1 -A8 '"Sottovoce"' | grep -E '"Sottovoce"|pid =' || true
+          gui=$(pgrep -f 'Sottovoce.app/Contents/MacOS/Sottovoce$' | wc -l | tr -d ' ')
+          echo "windows' processes: $gui"
+          ps -axo pid,ppid,command | grep -i '[S]ottovoce' || true
+          screencapture -x screenshots/mac-opened-twice.png || true
+          [ "$gui" = 1 ] || { echo "Sottovoce runs $gui times"; failed=1; }
+          pkill -f 'Sottovoce.app/Contents/MacOS/Sottovoce$' || true
           # the background run must not be a second (frozen-looking) app in the Dock
           "$APP" --sync-server > "$RUNNER_TEMP/bg.txt" 2>&1 &
           bg=$!
